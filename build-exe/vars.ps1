@@ -25,40 +25,89 @@ function Export-Variable()
     "$Name=$Value" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 }
 
-function ConvertTo-Version()
+function Parse-VersionString
 {
-    [OutputType([Version])]
+    [OutputType([PSCustomObject])]
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateLength(1, [int]::MaxValue)]
-        [string] $Version
+        [ValidateNotNullOrEmpty()]
+        [string] $VersionString
     )
-    if ($Version -match '^[0-9]+(\.[0-9]+)+') {
-        return [Version]$matches[0]
+
+    $semanticRegex = '^[0-9]+(\.[0-9]+)+'
+
+    $commitRegex = '^[0-9a-f]{7,40}$'
+
+    if ($VersionString -match $semanticRegex) {
+        return [PSCustomObject]@{
+            OriginalString = $VersionString
+            Type           = 'Semantic'
+            Comparable     = [Version]$matches[0]
+        }
     }
-    throw "Invalid Version: '$Version'"
+    elseif ($VersionString -imatch $commitRegex) {
+        return [PSCustomObject]@{
+            OriginalString = $VersionString
+            Type           = 'Commit'
+            Comparable     = $VersionString.ToLower()
+        }
+    }
+
+    throw "Invalid or unsupported version format: '$VersionString'"
 }
 
-function Resolve-TPVersion()
+function Resolve-TPVersion
 {
     [OutputType([string])]
     param(
         [Parameter(Mandatory = $true)]
-        [Version] $Version,
+        [string] $Version,
         [Parameter(Mandatory = $true)]
         [string[]] $TPVersions
     )
-    $sortedTPVersions = $TPVersions | Sort-Object -Property { ConvertTo-Version  -Version $_ } -Descending
-    foreach ($tpVersion in $sortedTPVersions) {
-        $cmp = ConvertTo-Version -Version $tpVersion
-        if ($Version -ge $cmp) {
-            if ($tpVersion -eq $sortedTPVersions[0]) {
-                return 'latest'
+
+    $parsedInputVersion = Parse-VersionString -VersionString $Version
+
+    switch ($parsedInputVersion.Type)
+    {
+        'Commit' {
+            $foundMatch = $TPVersions | Where-Object { $_ -ieq $parsedInputVersion.OriginalString }
+            if ($foundMatch) {
+                return $foundMatch
             }
-            return $tpVersion
+            throw "Commit-based version '$($parsedInputVersion.OriginalString)' not found in the list of available TP versions."
+        }
+
+        'Semantic' {
+            $semanticTPs = @()
+            foreach ($tpString in $TPVersions) {
+                try {
+                    $parsedTP = Parse-VersionString -VersionString $tpString
+                    if ($parsedTP.Type -eq 'Semantic') {
+                        $semanticTPs += $parsedTP
+                    }
+                } catch {
+                    Write-Verbose "Skipping '$parsedTP' from the TP list as it is not a valid semantic version."
+                }
+            }
+
+            if ($semanticTPs.Count -eq 0) {
+                throw "No valid semantic versions found in the TP versions list to compare against '$($parsedInputVersion.OriginalString)'."
+            }
+
+            $sortedTPs = $semanticTPs | Sort-Object -Property Comparable -Descending
+
+            foreach ($tp in $sortedTPs) {
+                if ($parsedInputVersion.Comparable -ge $tp.Comparable) {
+                    if ($tp.OriginalString -eq $sortedTPs[0].OriginalString) {
+                        return 'latest'
+                    }
+                    return $tp.OriginalString
+                }
+            }
+            return $sortedTPs[-1].OriginalString
         }
     }
-    return $sortedTPVersions[-1]
 }
 
 function ConvertTo-CygwinPath()
