@@ -393,7 +393,7 @@ See:
 $gnuUrlPrefixer = [GnuUrlPrefixer]::new()
 switch ($env:ICONV_VERSION) {
     default {
-        $iconvSourceUrl = "$($gnuUrlPrefixer.GetReleaseUrlPrefix())/libiconv/libiconv-$env:ICONV_VERSION.tar.gz"
+        $iconvSourceUrl = "https://gitweb.git.savannah.gnu.org/gitweb/?p=libiconv.git;a=snapshot;h=$env:ICONV_VERSION;sf=tgz"
     }
 }
 
