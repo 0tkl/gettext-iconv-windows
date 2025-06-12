@@ -25,7 +25,7 @@ function Export-Variable()
     "$Name=$Value" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 }
 
-function Parse-VersionString
+function ConvertTo-Version()
 {
     [OutputType([PSCustomObject])]
     param(
@@ -56,7 +56,7 @@ function Parse-VersionString
     throw "Invalid or unsupported version format: '$VersionString'"
 }
 
-function Resolve-TPVersion
+function Resolve-TPVersion()
 {
     [OutputType([string])]
     param(
@@ -66,7 +66,7 @@ function Resolve-TPVersion
         [string[]] $TPVersions
     )
 
-    $parsedInputVersion = Parse-VersionString -VersionString $Version
+    $parsedInputVersion = ConvertTo-Version -VersionString $Version
 
     switch ($parsedInputVersion.Type)
     {
@@ -82,7 +82,7 @@ function Resolve-TPVersion
             $semanticTPs = @()
             foreach ($tpString in $TPVersions) {
                 try {
-                    $parsedTP = Parse-VersionString -VersionString $tpString
+                    $parsedTP = ConvertTo-Version -VersionString $tpString
                     if ($parsedTP.Type -eq 'Semantic') {
                         $semanticTPs += $parsedTP
                     }
